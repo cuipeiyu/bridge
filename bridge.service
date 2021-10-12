@@ -1,15 +1,15 @@
 # copy to /usr/lib/systemd/system
 [Unit]
-Description=rinetd is an TCP/UDP redirection server
+Description=bridge is an TCP/UDP redirection server
 After=network.target
 
 [Service]
 Type=simple
 Restart=always
-ExecStart=<>
-WorkingDirectory=<>
+ExecStart=/usr/local/sbin/bridge
+WorkingDirectory=/usr/local/sbin/
 PrivateTmp=true
 
 [Install]
 WantedBy=multi-user.target
-Alias=rinetd.service
+Alias=bridge.service
