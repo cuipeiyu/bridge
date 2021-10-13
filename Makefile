@@ -3,4 +3,5 @@ export GOOS=linux
 
 # build
 build:
-	 go build -o bridge
+	go build -o dist/bridge
+	cp bridge.conf bridge.service dist
