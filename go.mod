@@ -1,4 +1,4 @@
-module github.com/zizixixi/bridge
+module github.com/cuipeiyu/bridge
 
 go 1.16
 
