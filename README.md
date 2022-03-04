@@ -2,7 +2,7 @@
 
 桥接网络
 
-## 如何使用(CentOS 为例)
+## 如何使用(CentOS7 为例)
 
 - 上传二进制文件与配置文件(.conf)至 ``/usr/local/sbin/`` 下
 
@@ -23,3 +23,10 @@
   systemctl start bridge
 
   ```
+
+## 定时重启（可选）
+
+```sh
+crontab -e
+* */2 * * * systemctl restart bridge
+```
