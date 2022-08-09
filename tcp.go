@@ -2,63 +2,51 @@ package main
 
 import (
 	"io"
+	"log"
 	"net"
 	"sync"
+	"time"
 )
 
-// 有的人是双向中任何一个方向断开，都会断开双向
-// 代码这样写, 技巧：还使用到了 sync.Once 只运行 1 次。
-// var once sync.Once
-// go func() {
-// 	io.Copy(connection, bashf)
-// 	once.Do(close)
-// }()
-// go func() {
-// 	io.Copy(bashf, connection)
-// 	once.Do(close)
-// }()
-func forwardTCP(c *chain, left io.ReadWriteCloser, right io.ReadWriteCloser) {
-	_ = c
-	wg := new(sync.WaitGroup)
+func forwardTCP(c *chain, from io.ReadWriteCloser, to io.ReadWriteCloser) {
+	g := new(sync.WaitGroup)
 	bothClose := make(chan bool, 1)
-	// right -> left
-	wg.Add(1)
+
+	// to -> from
+	g.Add(1)
 	go func() {
-		b := make([]byte, 512*1024)
-		_, _ = io.CopyBuffer(left, right, b)
-		wg.Done()
+		defer g.Done()
+		if _, err := io.Copy(from, to); err != nil {
+			return
+		}
 	}()
 
-	// left -> right
-	wg.Add(1)
+	// from -> to
+	g.Add(1)
 	go func() {
-		b := make([]byte, 512*1024)
-		_, _ = io.CopyBuffer(right, left, b)
-		wg.Done()
+		defer g.Done()
+		if _, err := io.Copy(to, from); err != nil {
+			return
+		}
 	}()
 
-	// wait read & write close
-	wg.Add(1)
 	go func() {
-		wg.Wait()
+		g.Wait()
 		close(bothClose)
-		wg.Done()
 	}()
 
 	select {
-	case <-bothClose:
-	case <-ctx.Done():
+	case <-bothClose: // 等待关闭
+	case <-ctx.Done(): // 等待退出
 	}
-	_ = left.Close()
-	_ = right.Close()
+
+	log.Printf("[I] 连接关闭")
+	_ = from.Close()
+	_ = to.Close()
 }
 
 func setupTCPChain(c *chain) {
 	var err error
-	// logger := Logger.WithName("setupTCPChain")
-	// logger = logger.WithValues("chain", c.String())
-	// logger.Info("enter")
-	// defer logger.Info("leave")
 
 	var lc net.ListenConfig
 	sn, err := lc.Listen(ctx, c.Proto, c.ListenAddr)
@@ -68,22 +56,28 @@ func setupTCPChain(c *chain) {
 	}
 	closeChan := registerCloseCnn0(sn)
 	for {
-		cnn, err := sn.Accept()
-		if err != nil {
-			// logger.Error(err, "error accept")
-			break
-		}
-
-		// connect peer
+		// 连接到目标
 		d := new(net.Dialer)
 		toCnn, err := d.DialContext(ctx, c.Proto, c.ToAddr)
 		if err != nil {
 			// logger.Error(err, "error dial ToAddr")
 			continue
 		}
-		// logger.Info("new connection pair",
-		// "1From", cnn.RemoteAddr().String(), "1To", cnn.LocalAddr().String(),
-		// "2From", toCnn.LocalAddr().String(), "2To", toCnn.RemoteAddr().String())
+
+		// 新连接
+		cnn, err := sn.Accept()
+		if err != nil {
+			// logger.Error(err, "error accept")
+			break
+		}
+
+		log.Printf("[I] 已初始化新连接")
+
+		// 设置读写超时
+		cnn.SetDeadline(time.Now().Add(time.Minute))
+
+		// 协程中
+		// 处理收发
 		wg.Add(1)
 		go func(arg1 *chain, arg2 io.ReadWriteCloser, arg3 io.ReadWriteCloser) {
 			defer wg.Done()

@@ -21,8 +21,6 @@ import (
 
 var wg sync.WaitGroup
 var ctx, ctxCancel = context.WithCancel(context.Background())
-var statInterval = time.Minute
-var isNotExit = false
 var tcpCounter atomic.Int64
 var udpCounter atomic.Int64
 var udpSsnMap = sync.Map{}
@@ -57,22 +55,6 @@ func registerCloseCnn0(c io.Closer) chan bool {
 	return cc
 }
 
-/**
-放弃的一种配置文件格式
-rinetd.toml sample
-[[Chans]]
-ListenAddr="0.0.0.0:5678"
-Proto="tcp"
-PeerAddr="127.0.0.1:8100"
-[[Chans]]
-ListenAddr="0.0.0.0:5679"
-Proto="tcp"
-PeerAddr="127.0.0.1:8200"
-parser sample
-0.0.0.0 5678/tcp 127.0.0.1 8100/tcp
-用上面的都太复杂了
-*/
-
 func setupChains() {
 	// setupSignal()
 	if len(chains) == 0 {
@@ -94,14 +76,15 @@ func setupChains() {
 }
 
 func stat() {
-	tc := time.Tick(statInterval)
+	tc := time.NewTicker(10 * time.Second)
+	defer tc.Stop()
 	// logger := Logger.WithName("stat")
 loop:
-	for isNotExit {
+	for {
 		select {
 		case <-ctx.Done():
 			break loop
-		case <-tc:
+		case <-tc.C:
 			log.Printf("[I] stat tcp:%3d, udp:%3d", tcpCounter.Load(), udpCounter.Load())
 		}
 	}
@@ -113,6 +96,7 @@ func main() {
 	loadConfigFile()
 
 	setupChains()
+
 	stat()
 
 	// 信号监听
@@ -135,7 +119,6 @@ EXIT:
 	}
 
 	ctxCancel()
-	isNotExit = true
 
 	// Logger.Info("all work exit")
 	log.Print("[I] 等待退出")
@@ -171,6 +154,7 @@ func loadConfigFile() {
 		t := sc.Text()
 		t = strings.TrimSpace(t)
 		if len(t) <= 0 || strings.HasPrefix(t, "#") || strings.HasPrefix(t, "//") {
+			// 跳过
 			continue
 		}
 
