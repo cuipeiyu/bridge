@@ -6,7 +6,6 @@ import (
 	"log"
 	"net"
 	"sync"
-	"time"
 )
 
 func forwardTCP(from io.ReadWriteCloser, to io.ReadWriteCloser) {
@@ -92,7 +91,7 @@ func setupTCPChain(c *chain) {
 			}
 
 			// 设置读写超时
-			arg2.SetDeadline(time.Now().Add(time.Minute))
+			// arg2.SetDeadline(time.Now().Add(time.Minute))
 
 			tcpCounter.Add(1)
 
