@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"io"
 	"log"
 	"net"
@@ -8,7 +9,7 @@ import (
 	"time"
 )
 
-func forwardTCP(c *chain, from io.ReadWriteCloser, to io.ReadWriteCloser) {
+func forwardTCP(from io.ReadWriteCloser, to io.ReadWriteCloser) {
 	g := new(sync.WaitGroup)
 	bothClose := make(chan bool, 1)
 
@@ -40,53 +41,69 @@ func forwardTCP(c *chain, from io.ReadWriteCloser, to io.ReadWriteCloser) {
 	case <-ctx.Done(): // 等待退出
 	}
 
-	log.Printf("[I] 连接关闭")
+	log.Printf("[I] release tcp connection")
 	_ = from.Close()
 	_ = to.Close()
 }
 
 func setupTCPChain(c *chain) {
+	defer wg.Done()
+
 	var err error
 
 	var lc net.ListenConfig
 	sn, err := lc.Listen(ctx, c.Proto, c.ListenAddr)
 	if err != nil {
-		// logger.Error(err, "error listen")
+		log.Printf("[E] new listen error: [%s][%s] %v", c.Proto, c.ListenAddr, err)
 		return
 	}
-	closeChan := registerCloseCnn0(sn)
-	for {
-		// 连接到目标
-		d := new(net.Dialer)
-		toCnn, err := d.DialContext(ctx, c.Proto, c.ToAddr)
-		if err != nil {
-			// logger.Error(err, "error dial ToAddr")
-			continue
-		}
+	defer sn.Close()
 
+	OnInterrupt(func() {
+		sn.Close()
+	})
+
+	for {
 		// 新连接
 		cnn, err := sn.Accept()
-		if err != nil {
-			// logger.Error(err, "error accept")
+		if errors.Is(err, net.ErrClosed) {
 			break
 		}
-
-		log.Printf("[I] 已初始化新连接")
-
-		// 设置读写超时
-		cnn.SetDeadline(time.Now().Add(time.Minute))
+		if err != nil {
+			log.Printf("[E] accept error: %v", err)
+			continue
+		}
 
 		// 协程中
 		// 处理收发
 		wg.Add(1)
-		go func(arg1 *chain, arg2 io.ReadWriteCloser, arg3 io.ReadWriteCloser) {
+		go func(arg1 *chain, arg2 net.Conn) {
 			defer wg.Done()
 
-			tcpCounter.Add(1)
-			forwardTCP(arg1, arg2, arg3)
-			tcpCounter.Sub(1)
-		}(c, cnn, toCnn)
+			// 连接到目标
+			d := new(net.Dialer)
+			to, err := d.DialContext(ctx, arg1.Proto, arg1.ToAddr)
+			if err != nil {
+				// 目标无法连接，不建立通信，并关闭连接
+				arg2.Close()
 
+				log.Printf("[E] dial ToAddr error: %v", err)
+				return
+			}
+
+			// 设置读写超时
+			arg2.SetDeadline(time.Now().Add(time.Minute))
+
+			tcpCounter.Add(1)
+
+			// 打印统计
+			showStat()
+
+			forwardTCP(arg2, to)
+			tcpCounter.Sub(1)
+
+			// 打印统计
+			showStat()
+		}(c, cnn)
 	}
-	close(closeChan)
 }

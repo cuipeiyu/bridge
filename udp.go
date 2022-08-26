@@ -47,7 +47,7 @@ func forwardUDP(us *udpSession) {
 	// logger = logger.WithValues("fromAddr", us.FromAddr.String())
 	// logger.Info("enter")
 	b := make([]byte, 64*1024)
-	closeChan := registerCloseCnn0(us)
+	// closeChan := registerCloseCnn0(us)
 	for {
 		// add one more second to make sure sub time > ttl
 		t := time.Now().Add(udpSsnTTL).Add(time.Second)
@@ -78,7 +78,7 @@ func forwardUDP(us *udpSession) {
 			}
 		}
 	}
-	close(closeChan)
+	// close(closeChan)
 	// logger.Info("leave")
 }
 
@@ -93,6 +93,8 @@ func udpSsnCanAge(us *udpSession, ttl time.Duration) bool {
 }
 
 func setupUDPChain(c *chain) {
+	defer wg.Done()
+
 	var err error
 	// logger := Logger.WithName("setupUDPChain")
 	// logger = logger.WithValues("chain", c.String())
@@ -105,7 +107,12 @@ func setupUDPChain(c *chain) {
 		// logger.Error(err, "error ListenPacket")
 		return
 	}
-	closeChan := registerCloseCnn0(pktCnn)
+
+	OnInterrupt(func() {
+		pktCnn.Close()
+	})
+
+	// closeChan := registerCloseCnn0(pktCnn)
 	rbuf := make([]byte, 128*1024)
 	for {
 		rsize, raddr, err := pktCnn.ReadFrom(rbuf)
@@ -148,5 +155,5 @@ func setupUDPChain(c *chain) {
 			udpSsnMap.Delete(ssnKey)
 		}
 	}
-	close(closeChan)
+	// close(closeChan)
 }

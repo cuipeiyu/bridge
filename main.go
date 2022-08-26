@@ -4,14 +4,11 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"io"
 	"log"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"go.uber.org/atomic"
@@ -40,110 +37,80 @@ func (c *chain) String() string {
 
 // 可以通过 WaitCtx.Done 关闭 Closer
 // 可以通过 返回值 chan 关闭 Closer
-func registerCloseCnn0(c io.Closer) chan bool {
-	cc := make(chan bool, 1)
+// func registerCloseCnn0(c io.Closer) chan bool {
+// 	cc := make(chan bool, 1)
 
-	wg.Add(1)
-	go func() {
-		select {
-		case <-ctx.Done():
-		case <-cc:
-		}
-		_ = c.Close()
-		wg.Done()
-	}()
-	return cc
-}
+// 	wg.Add(1)
+// 	go func() {
+// 		select {
+// 		case <-ctx.Done():
+// 		case <-cc:
+// 		}
+// 		_ = c.Close()
+// 		wg.Done()
+// 	}()
+// 	return cc
+// }
 
 func setupChains() {
-	// setupSignal()
 	if len(chains) == 0 {
-		// Logger.Info("no chains to work")
 		ctxCancel()
 		return
 	}
-	for _, c := range chains {
-		wg.Add(1)
-		go func(arg1 *chain) {
-			if arg1.Proto == "tcp" {
-				setupTCPChain(arg1)
-			} else if arg1.Proto == "udp" {
-				setupUDPChain(arg1)
-			}
-			wg.Done()
-		}(c)
-	}
-}
 
-func stat() {
-	tc := time.NewTicker(10 * time.Second)
-	defer tc.Stop()
-	// logger := Logger.WithName("stat")
-loop:
-	for {
-		select {
-		case <-ctx.Done():
-			break loop
-		case <-tc.C:
-			log.Printf("[I] stat tcp:%3d, udp:%3d", tcpCounter.Load(), udpCounter.Load())
+	for _, c := range chains {
+		if c.Proto == "tcp" {
+			wg.Add(1)
+			go setupTCPChain(c)
+		} else if c.Proto == "udp" {
+			wg.Add(1)
+			go setupUDPChain(c)
 		}
 	}
 }
 
+func showStat() {
+	log.Printf("[I] stat tcp:%3d, udp:%3d", tcpCounter.Load(), udpCounter.Load())
+}
+
 func main() {
-	log.Printf("[I] 启动中。。。")
+	log.Printf("[I] starting...")
 
 	loadConfigFile()
 
 	setupChains()
 
-	stat()
+	OnInterrupt(func() {
+		log.Printf("[I] begin exit...")
 
-	// 信号监听
-	state := 1
-	sc := make(chan os.Signal, 1)
-	signal.Notify(sc, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+		ctxCancel()
+	})
 
-EXIT:
-	for {
-		sig := <-sc
-		log.Printf("[I] 收到退出信号: %s", sig.String())
-		switch sig {
-		case syscall.SIGQUIT, syscall.SIGTERM, syscall.SIGINT:
-			state = 0
-			break EXIT
-		case syscall.SIGHUP:
-		default:
-			break EXIT
-		}
-	}
-
-	ctxCancel()
-
-	// Logger.Info("all work exit")
-	log.Print("[I] 等待退出")
 	wg.Wait()
 
-	log.Print("[I] 结束")
-	os.Exit(state)
+	log.Print("[I] wait all down...")
+	Wait()
+
+	log.Print("[I] exit success")
+	os.Exit(0)
 }
 
 func loadConfigFile() {
-	log.Printf("[D] 读取配置文件")
+	log.Printf("[D] begin load config file")
 
 	dir, _ := os.Getwd()
 	filename := filepath.Join(dir, "bridge.conf")
-	log.Printf("[D] 配置文件: %s", filename)
+	log.Printf("[D] ready to load config file: %s", filename)
 
 	_, err := os.Stat(filename)
 	if os.IsNotExist(err) {
-		log.Fatalf("[F] 配置文件不存在")
+		log.Fatalf("[F] config file not exists")
 		return
 	}
 
 	fr, err := os.Open(filename)
 	if err != nil {
-		// Logger.Error(err, "error openfile", "filename", filename)
+		log.Fatalf("[F] open the config file failed %v", err)
 		return
 	}
 	defer fr.Close()
@@ -174,7 +141,7 @@ func loadConfigFile() {
 			v.ListenAddr = arValid[0]
 			v.ToAddr = arValid[1]
 			v.Proto = strings.ToLower(arValid[2])
-			log.Printf("[D] 识别内容 %s", v.String())
+			log.Printf("[D] got config content: %s", v.String())
 			chains = append(chains, v)
 		}
 	}
