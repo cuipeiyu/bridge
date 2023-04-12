@@ -5,6 +5,7 @@ set -e
 clear
 
 echo 'Download'
+mkdir -p /tmp/bridge
 curl -o /tmp/bridge/bridge-linux-amd64.tar.gz https://f.cuipeiyu.com/bridge/bridge-linux-amd64.tar.gz
 
 echo 'Install'
@@ -22,5 +23,7 @@ echo 'Clean'
 rm -rf /tmp/bridge
 
 systemctl enable bridge
+
+clear
 
 echo 'Done'
