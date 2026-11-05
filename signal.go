@@ -9,16 +9,6 @@ import (
 
 // OnInterrupt registers a global function to call when CTRL+C pressed or a unix kill command received.
 func OnInterrupt(cb func()) {
-	// var cb func()
-	// switch v := callbackFuncOrFuncReturnsError.(type) {
-	// case func():
-	// 	cb = v
-	// case func() error:
-	// 	cb = func() { v() }
-	// default:
-	// 	panic(fmt.Errorf("unknown type of RegisterOnInterrupt callback: expected func() or func() error but got: %T", v))
-	// }
-
 	Interrupt.Register(cb)
 }
 
@@ -29,9 +19,9 @@ func Wait() {
 // Interrupt watches the os.Signals for interruption signals
 // and fires the callbacks when those happens.
 // A call of its `FireNow` manually will fire and reset the registered interrupt handlers.
-var Interrupt TnterruptListener = new(interruptListener)
+var Interrupt InterruptListener = new(interruptListener)
 
-type TnterruptListener interface {
+type InterruptListener interface {
 	Register(cb func())
 	FireNow()
 	Wait()
@@ -62,13 +52,13 @@ func (i *interruptListener) Register(cb func()) {
 // execute all interrupt handlers manually.
 func (i *interruptListener) FireNow() {
 	i.mu.Lock()
+	defer i.mu.Unlock()
 	i.wg.Add(len(i.onInterrupt))
 	for _, f := range i.onInterrupt {
 		f()
 		i.wg.Done()
 	}
 	i.onInterrupt = i.onInterrupt[0:0]
-	i.mu.Unlock()
 }
 
 // listenOnce fires a goroutine which calls the interrupt handlers when CTRL+C/CMD+C and e.t.c.
@@ -85,10 +75,6 @@ func (i *interruptListener) notifyAndFire() {
 	signal.Notify(ch,
 		// kill -SIGINT XXXX or Ctrl+c
 		os.Interrupt,
-		syscall.SIGINT, // register that too, it should be ok
-		// os.Kill  is equivalent with the syscall.SIGKILL
-		// os.Kill,
-		// syscall.SIGKILL, // register that too, it should be ok
 		// kill -SIGTERM XXXX
 		syscall.SIGTERM,
 	)

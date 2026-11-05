@@ -4,14 +4,14 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
-
-	"go.uber.org/atomic"
 )
 
 // worked like `rinetd`.
@@ -20,7 +20,6 @@ var wg sync.WaitGroup
 var ctx, ctxCancel = context.WithCancel(context.Background())
 var tcpCounter atomic.Int64
 var udpCounter atomic.Int64
-var udpSsnMap = sync.Map{}
 var udpSsnTTL = time.Minute
 var chains []*chain
 
@@ -35,23 +34,6 @@ func (c *chain) String() string {
 	return fmt.Sprintf("%v->%v/%v", c.ListenAddr, c.ToAddr, c.Proto)
 }
 
-// 可以通过 WaitCtx.Done 关闭 Closer
-// 可以通过 返回值 chan 关闭 Closer
-// func registerCloseCnn0(c io.Closer) chan bool {
-// 	cc := make(chan bool, 1)
-
-// 	wg.Add(1)
-// 	go func() {
-// 		select {
-// 		case <-ctx.Done():
-// 		case <-cc:
-// 		}
-// 		_ = c.Close()
-// 		wg.Done()
-// 	}()
-// 	return cc
-// }
-
 func setupChains() {
 	if len(chains) == 0 {
 		ctxCancel()
@@ -61,16 +43,12 @@ func setupChains() {
 	for _, c := range chains {
 		if c.Proto == "tcp" {
 			wg.Add(1)
-			go setupTCPChain(c)
+			go setupTCPChain(ctx, c)
 		} else if c.Proto == "udp" {
 			wg.Add(1)
-			go setupUDPChain(c)
+			go setupUDPChain(ctx, c)
 		}
 	}
-}
-
-func showStat() {
-	log.Printf("[I] stat tcp:%3d, udp:%3d", tcpCounter.Load(), udpCounter.Load())
 }
 
 func main() {
@@ -92,57 +70,55 @@ func main() {
 	Wait()
 
 	log.Print("[I] exit success")
-	os.Exit(0)
 }
 
 func loadConfigFile() {
-	log.Printf("[D] begin load config file")
-
-	dir, _ := os.Getwd()
+	dir, err := os.Getwd()
+	if err != nil {
+		log.Fatalf("[F] get working directory failed: %v", err)
+	}
 	filename := filepath.Join(dir, "bridge.conf")
 	log.Printf("[D] ready to load config file: %s", filename)
 
-	_, err := os.Stat(filename)
-	if os.IsNotExist(err) {
-		log.Fatalf("[F] config file not exists")
-		return
-	}
-
 	fr, err := os.Open(filename)
 	if err != nil {
-		log.Fatalf("[F] open the config file failed %v", err)
-		return
+		log.Fatalf("[F] open the config file failed: %v", err)
 	}
 	defer fr.Close()
 
-	// 逐行扫描
-	sc := bufio.NewScanner(fr)
+	chains = append(chains, parseConfig(fr)...)
+}
+
+// parseConfig 从 r 中逐行解析转发规则，格式：ListenAddr ToAddr Proto
+// 跳过空行、# 和 // 注释，Proto 仅接受 tcp/udp（大小写不敏感），非法行记录日志后跳过。
+func parseConfig(r io.Reader) []*chain {
+	var cs []*chain
+	sc := bufio.NewScanner(r)
 	for sc.Scan() {
-		t := sc.Text()
-		t = strings.TrimSpace(t)
-		if len(t) <= 0 || strings.HasPrefix(t, "#") || strings.HasPrefix(t, "//") {
-			// 跳过
+		t := strings.TrimSpace(sc.Text())
+		if t == "" || strings.HasPrefix(t, "#") || strings.HasPrefix(t, "//") {
 			continue
 		}
 
-		ar := strings.Fields(t)
-		if len(ar) < 3 {
+		f := strings.Fields(t)
+		if len(f) < 3 {
+			log.Printf("[E] invalid config line, skipped: %s", t)
 			continue
 		}
-		arValid := make([]string, 0)
-		for _, e := range ar {
-			e = strings.TrimSpace(e)
-			if len(e) > 0 {
-				arValid = append(arValid, e)
-			}
+
+		proto := strings.ToLower(f[2])
+		if proto != "tcp" && proto != "udp" {
+			log.Printf("[E] invalid proto %q, skipped: %s", f[2], t)
+			continue
 		}
-		if len(arValid) > 2 {
-			v := &chain{}
-			v.ListenAddr = arValid[0]
-			v.ToAddr = arValid[1]
-			v.Proto = strings.ToLower(arValid[2])
-			log.Printf("[D] got config content: %s", v.String())
-			chains = append(chains, v)
+
+		v := &chain{
+			ListenAddr: f[0],
+			ToAddr:     f[1],
+			Proto:      proto,
 		}
+		log.Printf("[D] got config content: %s", v.String())
+		cs = append(cs, v)
 	}
+	return cs
 }

@@ -9,6 +9,9 @@ Restart=always
 ExecStart=/usr/local/sbin/bridge
 WorkingDirectory=/usr/local/sbin/
 PrivateTmp=true
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
 
 [Install]
 WantedBy=multi-user.target

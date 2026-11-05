@@ -4,11 +4,11 @@ set -e
 
 clear
 
-echo 'Download'
+echo 'Download...'
 mkdir -p /tmp/bridge
-curl -o /tmp/bridge/bridge-linux-amd64.tar.gz https://f.cuipeiyu.com/bridge/bridge-linux-amd64.tar.gz
+curl -fsSL -o /tmp/bridge/bridge-linux-amd64.tar.gz https://f.cuipeiyu.com/bridge/bridge-linux-amd64.tar.gz
 
-echo 'Install'
+echo 'Installing...'
 tar -vxf /tmp/bridge/bridge-linux-amd64.tar.gz -C /tmp/bridge
 
 cp -f /tmp/bridge/bridge /usr/local/sbin
@@ -18,12 +18,8 @@ chmod +x /usr/local/sbin/bridge
 
 cp -f /tmp/bridge/bridge.service /usr/lib/systemd/system
 
-echo 'Clean'
-
-rm -rf /tmp/bridge
-
 systemctl enable bridge
 
-clear
+rm -rf /tmp/bridge
 
 echo 'Done'

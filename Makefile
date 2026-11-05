@@ -7,14 +7,18 @@ release:
 
 	GOOS=windows GOARCH=amd64 make build-windows
 
-# build unix binrary
+# build linux-amd64 package locally (dist/bridge-linux-amd64.tar.gz)
+build-linux-amd64:
+	GOOS=linux GOARCH=amd64 make build-unix
+
+# build unix binary
 build-unix:
 	mkdir -p dist/$(GOOS)-$(GOARCH)
 	cp README.md bridge.conf bridge.service dist/$(GOOS)-$(GOARCH)
 	go build -o dist/$(GOOS)-$(GOARCH)/bridge
 	cd dist/$(GOOS)-$(GOARCH) && tar -zvcf ../bridge-$(GOOS)-$(GOARCH).tar.gz README.md bridge bridge.conf bridge.service
 
-# build windows binrary
+# build windows binary
 build-windows:
 	mkdir -p dist/$(GOOS)-$(GOARCH)
 	cp README.md bridge.conf bridge.service dist/$(GOOS)-$(GOARCH)
