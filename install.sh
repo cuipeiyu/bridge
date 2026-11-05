@@ -6,7 +6,7 @@ clear
 
 echo 'Download...'
 mkdir -p /tmp/bridge
-curl -fsSL -o /tmp/bridge/bridge-linux-amd64.tar.gz https://f.cuipeiyu.com/bridge/bridge-linux-amd64.tar.gz
+curl -fsSL -o /tmp/bridge/bridge-linux-amd64.tar.gz https://github.com/cuipeiyu/bridge/releases/latest/download/bridge-linux-amd64.tar.gz
 
 echo 'Installing...'
 tar -vxf /tmp/bridge/bridge-linux-amd64.tar.gz -C /tmp/bridge
