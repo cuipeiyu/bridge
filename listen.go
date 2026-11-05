@@ -25,7 +25,7 @@ func v6OnlyControl(listenAddr string) func(network, address string, conn syscall
 	return func(network, address string, conn syscall.RawConn) error {
 		var serr error
 		conn.Control(func(fd uintptr) {
-			serr = syscall.SetsockoptInt(int(fd), syscall.IPPROTO_IPV6, syscall.IPV6_V6ONLY, 1)
+			serr = setV6Only(fd)
 		})
 		return serr
 	}
