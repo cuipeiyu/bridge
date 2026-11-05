@@ -86,6 +86,9 @@ func setupUDPChain(ctx context.Context, c *chain) {
 	defer wg.Done()
 
 	var lc net.ListenConfig
+	if ctl := v6OnlyControl(c.ListenAddr); ctl != nil {
+		lc.Control = ctl
+	}
 	pktCnn, err := lc.ListenPacket(ctx, c.Proto, c.ListenAddr)
 	if err != nil {
 		log.Printf("[E] udp listen error: [%s][%s] %v", c.Proto, c.ListenAddr, err)

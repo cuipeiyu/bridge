@@ -33,6 +33,9 @@ func setupTCPChain(ctx context.Context, c *chain) {
 	defer wg.Done()
 
 	var lc net.ListenConfig
+	if ctl := v6OnlyControl(c.ListenAddr); ctl != nil {
+		lc.Control = ctl
+	}
 	sn, err := lc.Listen(ctx, c.Proto, c.ListenAddr)
 	if err != nil {
 		log.Printf("[E] new listen error: [%s][%s] %v", c.Proto, c.ListenAddr, err)
